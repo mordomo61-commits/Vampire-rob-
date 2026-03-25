@@ -4,22 +4,16 @@ import {
   type ChatInputCommandInteraction,
 } from "discord.js";
 import { successEmbed, errorEmbed } from "../../lib/embed.js";
-import { createWriteStream } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
-import { pipeline } from "stream/promises";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export const data = [
   new SlashCommandBuilder()
     .setName("createemoji")
-    .setDescription("Criar um emoji no servidor")
+    .setDescription("Criar um emoji no servidor a partir de uma imagem")
     .addStringOption((o) =>
-      o.setName("nome").setDescription("Nome do emoji").setRequired(true)
+      o.setName("nome").setDescription("Nome do emoji (apenas letras, números e _)").setRequired(true)
     )
     .addAttachmentOption((o) =>
-      o.setName("imagem").setDescription("Imagem do emoji (PNG/GIF)").setRequired(true)
+      o.setName("imagem").setDescription("Imagem do emoji (PNG/GIF, máx 256KB)").setRequired(true)
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageEmojisAndStickers),
 
@@ -117,7 +111,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       description: `Figurinha: ${name}`,
     }).catch((e) => { console.error("Sticker create error:", e); return null; });
 
-    if (!sticker) return interaction.editReply({ embeds: [errorEmbed("Falha ao criar figurinha. Verifique se: o arquivo é PNG válido, o servidor tem espaço para figurinhas e o bot tem permissão.")] });
+    if (!sticker) return interaction.editReply({ embeds: [errorEmbed("Falha ao criar figurinha. Verifique se: o arquivo é PNG válido, o servidor tem espaço e o bot tem permissão.")] });
 
     await interaction.editReply({
       embeds: [successEmbed("✅ Figurinha Criada!", `Figurinha **${sticker.name}** criada com sucesso!`)],

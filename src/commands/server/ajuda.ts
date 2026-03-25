@@ -1,72 +1,139 @@
 import {
   SlashCommandBuilder,
   ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
   EmbedBuilder,
   type ChatInputCommandInteraction,
+  type StringSelectMenuInteraction,
 } from "discord.js";
 import { BLOOD_RED } from "../../lib/embed.js";
 
+const CATEGORIES: Record<string, { emoji: string; label: string; description: string; fields: { name: string; value: string }[] }> = {
+  economy: {
+    emoji: "💰",
+    label: "Economia",
+    description: "Sistema de moedas, apostas e transferências",
+    fields: [
+      { name: "💰 /coins", value: "Ver seu saldo e top de moedas" },
+      { name: "📅 /daily", value: "Coletar moedas diárias" },
+      { name: "🤲 /pedir", value: "Pedir moedas a outro usuário" },
+      { name: "💸 /transfer", value: "Transferir moedas para outro usuário" },
+    ],
+  },
+  minigames: {
+    emoji: "🎮",
+    label: "Minigames",
+    description: "Jogos para ganhar (ou perder) moedas",
+    fields: [
+      { name: "🃏 /blackjack", value: "Jogue blackjack contra o bot" },
+      { name: "🪙 /coinflip", value: "Aposte moedas no cara ou coroa" },
+      { name: "💣 /mines", value: "Jogo de campo minado — saiba a hora de parar!" },
+    ],
+  },
+  moderation: {
+    emoji: "🔨",
+    label: "Moderação",
+    description: "Ferramentas para moderar o servidor",
+    fields: [
+      { name: "🔨 /ban", value: "Banir um usuário do servidor" },
+      { name: "👢 /kick", value: "Expulsar um usuário do servidor" },
+      { name: "🔇 /mute", value: "Silenciar um usuário temporariamente" },
+      { name: "🗑️ /clear", value: "Apagar múltiplas mensagens" },
+    ],
+  },
+  roles: {
+    emoji: "🏷️",
+    label: "Cargos",
+    description: "Gerenciar cargos automáticos e interativos",
+    fields: [
+      { name: "🏷️ /autorole", value: "Cargo automático ao entrar no servidor" },
+      { name: "🔘 /buttonrole", value: "Cargo via botão interativo" },
+      { name: "😀 /reactionrole", value: "Cargo via reação em mensagem" },
+    ],
+  },
+  server: {
+    emoji: "⚙️",
+    label: "Servidor",
+    description: "Ferramentas de configuração do servidor",
+    fields: [
+      { name: "🖼️ /servericon", value: "Ver ícone do servidor" },
+      { name: "😂 /createemoji", value: "Criar emoji com imagem" },
+      { name: "🗑️ /deleteemoji", value: "Remover emoji do servidor" },
+      { name: "🎨 /stickercreate", value: "Criar figurinha no servidor" },
+      { name: "🗑️ /stickerdelete", value: "Remover figurinha do servidor" },
+      { name: "🔒 /linkblock", value: "Bloquear/desbloquear links em canais" },
+    ],
+  },
+  tickets: {
+    emoji: "🎫",
+    label: "Tickets",
+    description: "Sistema de atendimento e suporte via tickets",
+    fields: [
+      { name: "🎫 /ticketpainel", value: "Criar painel de tickets no canal" },
+    ],
+  },
+  welcome: {
+    emoji: "👋",
+    label: "Boas-vindas e Saídas",
+    description: "Mensagens automáticas de entrada e saída de membros",
+    fields: [
+      { name: "👋 /mensagemdeentrada configurar", value: "Configurar mensagem de boas-vindas ao entrar" },
+      { name: "❌ /mensagemdeentrada remover", value: "Remover mensagem de boas-vindas" },
+      { name: "🚪 /mensagemsaida configurar", value: "Configurar mensagem ao sair do servidor" },
+      { name: "❌ /mensagemsaida remover", value: "Remover mensagem de saída" },
+    ],
+  },
+  embed: {
+    emoji: "📝",
+    label: "Embeds",
+    description: "Criar mensagens embed personalizadas",
+    fields: [
+      { name: "📝 /embed criar", value: "Criar embed personalizado com painel visual" },
+    ],
+  },
+  quiz: {
+    emoji: "🧠",
+    label: "Quiz",
+    description: "Sistema de quiz interativo para o servidor",
+    fields: [
+      { name: "🧠 /quiz iniciar", value: "Iniciar rodada de quiz no canal" },
+      { name: "📋 /quiz status", value: "Ver status do quiz em andamento" },
+      { name: "⏹️ /quiz encerrar", value: "Encerrar quiz manualmente" },
+    ],
+  },
+};
+
 export const data = new SlashCommandBuilder()
   .setName("ajuda")
-  .setDescription("Ver todos os comandos e suporte do bot");
+  .setDescription("Veja todos os comandos disponíveis do Vampire Bot");
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  const embed = new EmbedBuilder()
+  const mainEmbed = new EmbedBuilder()
     .setColor(BLOOD_RED)
     .setTitle("🧛 Vampire Bot — Central de Ajuda")
-    .setDescription("Aqui estão todos os comandos disponíveis!\n\nPrecisa de suporte? Entre no nosso servidor!")
-    .addFields(
-      {
-        name: "🎫 Tickets",
-        value: "`/ticketpainel criar` `/ticketpainel listar` `/ticketpainel deletar`",
-        inline: false,
-      },
-      {
-        name: "👥 Cargos",
-        value: "`/reactionrole` `/buttonrole` `/autorole` `/autorolebutton`",
-        inline: false,
-      },
-      {
-        name: "🎮 Minigames",
-        value: "`/mines` `/blackjack` `/coinflip`",
-        inline: false,
-      },
-      {
-        name: "🪙 Economia",
-        value: "`/saldo` `/ranking global` `/ranking serve` `/daily` `/transferir` `/pedir`",
-        inline: false,
-      },
-      {
-        name: "❓ Quiz",
-        value: "`/quiz jogar` `/quiz encerrar`\nResponda digitando a letra **(A/B/C/D)** ou a resposta no chat!",
-        inline: false,
-      },
-      {
-        name: "🛡️ Moderação",
-        value: "`/ban` `/kick` `/mute` `/clear`",
-        inline: false,
-      },
-      {
-        name: "🔧 Ferramentas",
-        value: "`/webhook criar|ver|excluir` `/embed criar` `/servericon`\n`/createemoji` `/deleteemoji` `/stickercreate` `/stickerdelete`\n`/linkblock`",
-        inline: false,
-      },
+    .setDescription(
+      "Selecione uma categoria abaixo para ver os comandos disponíveis.\n\n" +
+      Object.entries(CATEGORIES)
+        .map(([, cat]) => `${cat.emoji} **${cat.label}** — ${cat.description}`)
+        .join("\n")
     )
-    .setFooter({ text: "Vampire Bot • Suporte em discord.gg/pZ2YpmEDSG" })
-    .setTimestamp();
+    .setFooter({ text: "Vampire Bot • Selecione a categoria no menu abaixo" });
 
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setLabel("💬 Servidor de Suporte")
-      .setStyle(ButtonStyle.Link)
-      .setURL("https://discord.gg/p2jvQeptp8"),
-    new ButtonBuilder()
-      .setLabel("➕ Adicionar ao Servidor")
-      .setStyle(ButtonStyle.Link)
-      .setURL("https://discord.com/oauth2/authorize?client_id=1485871101333602444&permissions=8&integration_type=0&scope=bot+applications.commands"),
-  );
+  const select = new StringSelectMenuBuilder()
+    .setCustomId("ajuda_menu")
+    .setPlaceholder("📂 Selecione uma categoria...")
+    .addOptions(
+      Object.entries(CATEGORIES).map(([key, cat]) =>
+        new StringSelectMenuOptionBuilder()
+          .setLabel(cat.label)
+          .setValue(`ajuda_${key}`)
+          .setDescription(cat.description)
+          .setEmoji(cat.emoji)
+      )
+    );
 
-  await interaction.reply({ embeds: [embed], components: [row] });
+  const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+
+  await interaction.reply({ embeds: [mainEmbed], components: [row] });
 }

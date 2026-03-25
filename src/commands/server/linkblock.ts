@@ -2,24 +2,22 @@ import {
   SlashCommandBuilder,
   PermissionFlagsBits,
   type ChatInputCommandInteraction,
-  type Message,
-  Events,
 } from "discord.js";
-import { db } from "../../db";
-import { linkBlockConfig } from "../../db";
+import { db } from "../../db/index.js";
+import { linkBlockConfig } from "../../db/index.js";
 import { and, eq } from "drizzle-orm";
-import { successEmbed, errorEmbed, BLOOD_RED } from "../../lib/embed.js";
+import { successEmbed, errorEmbed } from "../../lib/embed.js";
 
-const URL_REGEX = /(https?:\/\/[^\s]+|discord\.gg\/[^\s]+|www\.[^\s]+\.[a-z]{2,})/gi;
+export const URL_REGEX = /(https?:\/\/[^\s]+|discord\.gg\/[^\s]+|www\.[^\s]+\.[a-z]{2,})/gi;
 
 export const data = new SlashCommandBuilder()
   .setName("linkblock")
-  .setDescription("Gerenciar bloqueio de links")
+  .setDescription("Gerenciar bloqueio de links em canais")
   .addSubcommand((s) =>
     s.setName("ativar")
-      .setDescription("Bloquear links em um canal")
+      .setDescription("Bloquear links em um canal específico")
       .addChannelOption((o) => o.setName("canal").setDescription("Canal para bloquear links").setRequired(true))
-      .addStringOption((o) => o.setName("mensagem").setDescription("Mensagem ao bloquear link (padrão: 🚫 Links não são permitidos!)").setRequired(false))
+      .addStringOption((o) => o.setName("mensagem").setDescription("Mensagem ao bloquear link").setRequired(false))
       .addRoleOption((o) => o.setName("cargo_permitido").setDescription("Cargo que pode enviar links (ex: staff)").setRequired(false))
   )
   .addSubcommand((s) =>
@@ -68,7 +66,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           .addFields(
             { name: "📁 Canal", value: `<#${channel.id}>`, inline: true },
             { name: "💬 Mensagem", value: message, inline: false },
-            { name: "✅ Cargo permitido", value: allowedRole ? `<@&${allowedRole.id}>` : "Nenhum (staff não precisa do cargo)", inline: false },
+            { name: "✅ Cargo permitido", value: allowedRole ? `<@&${allowedRole.id}>` : "Nenhum (staff com `ManageMessages` não precisa)", inline: false },
           )
       ],
     });
@@ -95,5 +93,3 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     await interaction.reply({ embeds: [successEmbed("🔒 Canais com Bloqueio de Links", list)] });
   }
 }
-
-export { URL_REGEX };

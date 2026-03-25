@@ -20,7 +20,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   await interaction.reply({
     embeds: [
-      infoEmbed(`🖼️ Foto do servidor: ${guild.name}`, `[Clique para baixar](${icon})`)
+      infoEmbed(`🖼️ Foto do servidor: ${guild.name}`, `[Clique para baixar em alta resolução](${icon})`)
         .setImage(icon)
         .setFooter({ text: `ID: ${guild.id}` }),
     ],
