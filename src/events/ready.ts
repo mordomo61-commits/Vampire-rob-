@@ -10,7 +10,7 @@ export async function execute(client: Client) {
   client.user?.setPresence({
     activities: [
       {
-        name: `/help | ${client.guilds.cache.size} servidores`,
+        name: `/ajuda | ${client.guilds.cache.size} servidores`,
         type: ActivityType.Watching,
       },
     ],
