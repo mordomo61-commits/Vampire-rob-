@@ -5,12 +5,8 @@ import {
   TextInputBuilder,
   TextInputStyle,
   ActionRowBuilder,
-  EmbedBuilder,
-  ButtonBuilder,
-  ButtonStyle,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { BLOOD_RED } from "../../lib/embed.js";
 
 export const data = new SlashCommandBuilder()
   .setName("embed")
