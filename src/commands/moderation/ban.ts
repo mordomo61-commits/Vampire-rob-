@@ -20,8 +20,8 @@ export const data = new SlashCommandBuilder()
   .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers);
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ embeds: [errorEmbed("Apenas administradores podem usar este comando.")], ephemeral: true });
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.BanMembers)) {
+    return interaction.reply({ embeds: [errorEmbed("Você não tem permissão para banir membros.")], ephemeral: true });
   }
 
   const target = interaction.options.getUser("usuario", true);
@@ -29,7 +29,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const member = await interaction.guild?.members.fetch(target.id).catch(() => null);
 
   if (!member) return interaction.reply({ embeds: [errorEmbed("Usuário não encontrado no servidor.")], ephemeral: true });
-  if (!member.bannable) return interaction.reply({ embeds: [errorEmbed("Não posso banir este usuário.")], ephemeral: true });
+  if (!member.bannable) return interaction.reply({ embeds: [errorEmbed("Não posso banir este usuário. Verifique se ele tem cargo superior ao meu.")], ephemeral: true });
 
   const encodedReason = encodeURIComponent(reason).slice(0, 80);
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -43,7 +43,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       .setStyle(ButtonStyle.Secondary)
   );
 
-  // Visible to everyone so the whole server can see the ban confirmation
   await interaction.reply({
     embeds: [
       successEmbed("⚠️ Confirmação de Ban")

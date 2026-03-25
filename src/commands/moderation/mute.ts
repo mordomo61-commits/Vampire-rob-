@@ -7,13 +7,13 @@ import { successEmbed, errorEmbed } from "../../lib/embed.js";
 
 export const data = new SlashCommandBuilder()
   .setName("mute")
-  .setDescription("Silenciar um usuário temporariamente")
+  .setDescription("Silenciar um usuário temporariamente (timeout)")
   .addUserOption((o) =>
     o.setName("usuario").setDescription("Usuário a ser silenciado").setRequired(true)
   )
   .addStringOption((o) =>
     o.setName("tempo")
-      .setDescription("Duração (ex: 10m, 1h, 1d)")
+      .setDescription("Duração (ex: 10m, 1h, 1d — máx 28d)")
       .setRequired(true)
   )
   .addStringOption((o) =>
@@ -27,12 +27,12 @@ function parseDuration(str: string): number | null {
   const val = parseInt(match[1]);
   const unit = match[2];
   const multipliers: Record<string, number> = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
-  return val * multipliers[unit];
+  return val * multipliers[unit]!;
 }
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ embeds: [errorEmbed("Apenas administradores podem usar este comando.")], ephemeral: true });
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers)) {
+    return interaction.reply({ embeds: [errorEmbed("Você não tem permissão para silenciar membros.")], ephemeral: true });
   }
 
   const target = interaction.options.getUser("usuario", true);
@@ -41,7 +41,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const duration = parseDuration(tempoStr);
   if (!duration) {
-    return interaction.reply({ embeds: [errorEmbed("Formato de tempo inválido. Use: 10m, 1h, 1d")], ephemeral: true });
+    return interaction.reply({ embeds: [errorEmbed("Formato de tempo inválido. Use: 10s, 10m, 1h, 1d")], ephemeral: true });
   }
 
   if (duration > 28 * 24 * 3600000) {
@@ -50,6 +50,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const member = await interaction.guild?.members.fetch(target.id).catch(() => null);
   if (!member) return interaction.reply({ embeds: [errorEmbed("Usuário não encontrado.")], ephemeral: true });
+  if (!member.moderatable) return interaction.reply({ embeds: [errorEmbed("Não posso silenciar este usuário.")], ephemeral: true });
 
   await member.timeout(duration, reason);
 

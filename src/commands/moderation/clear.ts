@@ -19,8 +19,8 @@ export const data = new SlashCommandBuilder()
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages);
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ embeds: [errorEmbed("Apenas administradores podem usar este comando.")], ephemeral: true });
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
+    return interaction.reply({ embeds: [errorEmbed("Você não tem permissão para apagar mensagens.")], ephemeral: true });
   }
 
   const amount = interaction.options.getInteger("quantidade", true);
@@ -32,6 +32,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const count = deleted?.size ?? 0;
 
   await interaction.editReply({
-    embeds: [successEmbed("🗑️ Mensagens Apagadas", `**${count}** mensagens foram removidas do canal.`)],
+    embeds: [successEmbed("🗑️ Mensagens Apagadas", `**${count}** mensagem(s) foram removidas do canal.\n\n> Mensagens com mais de 14 dias não podem ser apagadas em massa.`)],
   });
 }

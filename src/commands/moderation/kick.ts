@@ -20,8 +20,8 @@ export const data = new SlashCommandBuilder()
   .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers);
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ embeds: [errorEmbed("Apenas administradores podem usar este comando.")], ephemeral: true });
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.KickMembers)) {
+    return interaction.reply({ embeds: [errorEmbed("Você não tem permissão para expulsar membros.")], ephemeral: true });
   }
 
   const target = interaction.options.getUser("usuario", true);
@@ -29,7 +29,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const member = await interaction.guild?.members.fetch(target.id).catch(() => null);
 
   if (!member) return interaction.reply({ embeds: [errorEmbed("Usuário não encontrado.")], ephemeral: true });
-  if (!member.kickable) return interaction.reply({ embeds: [errorEmbed("Não posso expulsar este usuário.")], ephemeral: true });
+  if (!member.kickable) return interaction.reply({ embeds: [errorEmbed("Não posso expulsar este usuário. Verifique se ele tem cargo superior ao meu.")], ephemeral: true });
 
   const encodedReason = encodeURIComponent(reason).slice(0, 80);
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
