@@ -1,0 +1,29 @@
+{
+  "name": "vampire-bot",
+  "version": "1.0.0",
+  "description": "Vampire#8151 — Bot Discord completo com tickets, economia, minigames, moderação e mais.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts",
+    "deploy": "tsx src/deploy.ts",
+    "db:push": "drizzle-kit push --config drizzle.config.ts"
+  },
+  "dependencies": {
+    "discord.js": "^14.25.1",
+    "@discordjs/builders": "^1.14.0",
+    "@discordjs/rest": "^2.6.1",
+    "drizzle-orm": "^0.41.0",
+    "pg": "^8.20.0",
+    "zod": "^3.24.0",
+    "drizzle-zod": "^0.8.3",
+    "dotenv": "^16.5.0",
+    "tsx": "^4.19.4"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.2",
+    "@types/node": "^22.15.3",
+    "@types/pg": "^8.18.0",
+    "drizzle-kit": "^0.31.9"
+  }
+}
