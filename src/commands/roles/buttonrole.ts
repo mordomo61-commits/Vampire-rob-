@@ -7,8 +7,8 @@ import {
   EmbedBuilder,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { db } from "../../db";
-import { buttonRoles } from "../../db";
+import { db } from "../../db/index.js";
+import { buttonRoles } from "../../db/index.js";
 import { and, eq } from "drizzle-orm";
 import { successEmbed, errorEmbed, BLOOD_RED } from "../../lib/embed.js";
 
@@ -26,7 +26,7 @@ export const data = new SlashCommandBuilder()
     s.setName("adicionar")
       .setDescription("Adicionar botão de cargo a uma mensagem existente")
       .addStringOption((o) => o.setName("mensagem_id").setDescription("ID da mensagem onde o botão será adicionado").setRequired(true))
-      .addRoleOption((o) => o.setName("cargo").setDescription("Cargo a atribuir").setRequired(true))
+      .addRoleOption((o) => o.setName("cargo").setDescription("Cargo a atribuir/remover com o botão").setRequired(true))
       .addStringOption((o) => o.setName("label").setDescription("Texto do botão").setRequired(true))
       .addStringOption((o) =>
         o.setName("cor").setDescription("Cor do botão").setRequired(false)
@@ -41,7 +41,7 @@ export const data = new SlashCommandBuilder()
   .addSubcommand((s) =>
     s.setName("criar")
       .setDescription("Criar nova mensagem embed com botão de cargo")
-      .addRoleOption((o) => o.setName("cargo").setDescription("Cargo").setRequired(true))
+      .addRoleOption((o) => o.setName("cargo").setDescription("Cargo a atribuir/remover").setRequired(true))
       .addStringOption((o) => o.setName("label").setDescription("Texto do botão").setRequired(true))
       .addStringOption((o) =>
         o.setName("cor").setDescription("Cor do botão").setRequired(false)
@@ -56,13 +56,13 @@ export const data = new SlashCommandBuilder()
   )
   .addSubcommand((s) =>
     s.setName("remove")
-      .setDescription("Remover button role e botão de uma mensagem")
+      .setDescription("Remover button role de uma mensagem")
       .addStringOption((o) => o.setName("mensagem_id").setDescription("ID da mensagem").setRequired(true))
       .addStringOption((o) => o.setName("label").setDescription("Label do botão a remover (deixe vazio para remover todos)").setRequired(false))
   )
   .addSubcommand((s) =>
     s.setName("lista")
-      .setDescription("Listar button roles do servidor")
+      .setDescription("Listar button roles configurados neste servidor")
   )
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles);
 
@@ -84,7 +84,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     const customId = `buttonrole_${role.id}_${Date.now()}`;
 
-    // Get existing components and add new button
     const existingRows = msg.components as any[];
     let targetRow: ActionRowBuilder<ButtonBuilder> | null = null;
 
@@ -127,7 +126,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       roleId: role.id,
     });
 
-    await interaction.editReply({ embeds: [successEmbed("✅ Botão Adicionado!", `Botão **${label}** (${cor}) adicionado à mensagem para o cargo ${role}!`)] });
+    await interaction.editReply({ embeds: [successEmbed("✅ Botão Adicionado!", `Botão **${label}** adicionado à mensagem para o cargo ${role}!`)] });
   }
 
   else if (sub === "criar") {
@@ -154,7 +153,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       roleId: role.id,
     });
 
-    await interaction.reply({ embeds: [successEmbed("✅ Button Role Criado", `Mensagem criada com botão **${label}** (${cor}) para o cargo ${role}!`)], ephemeral: true });
+    await interaction.reply({ embeds: [successEmbed("✅ Button Role Criado", `Mensagem criada com botão **${label}** para o cargo ${role}!`)], ephemeral: true });
   }
 
   else if (sub === "remove") {
@@ -166,7 +165,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const msg = await (interaction.channel as any).messages.fetch(messageId).catch(() => null);
 
     if (labelFilter) {
-      // Remove specific button
       const rows = await db.select().from(buttonRoles).where(
         and(eq(buttonRoles.guildId, interaction.guild.id), eq(buttonRoles.messageId, messageId), eq(buttonRoles.label, labelFilter))
       );
@@ -190,9 +188,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
         await msg.edit({ components: updatedRows }).catch(() => {});
       }
-      await interaction.editReply({ embeds: [successEmbed("🗑️ Botão Removido", `Botão **${labelFilter}** removido.`)] });
+      await interaction.editReply({ embeds: [successEmbed("🗑️ Botão Removido", `Botão **${labelFilter}** removido da mensagem.`)] });
     } else {
-      // Remove all
       await db.delete(buttonRoles).where(
         and(eq(buttonRoles.guildId, interaction.guild.id), eq(buttonRoles.messageId, messageId))
       );
@@ -203,7 +200,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   else if (sub === "lista") {
     const rows = await db.select().from(buttonRoles).where(eq(buttonRoles.guildId, interaction.guild.id));
-    if (!rows.length) return interaction.reply({ embeds: [errorEmbed("Nenhum button role configurado.")], ephemeral: true });
+    if (!rows.length) return interaction.reply({ embeds: [errorEmbed("Nenhum button role configurado neste servidor.")], ephemeral: true });
     const list = rows.map((r) => `**Msg:** \`${r.messageId}\` | **Botão:** ${r.label} | **Cargo:** <@&${r.roleId}>`).join("\n");
     await interaction.reply({ embeds: [successEmbed("📋 Button Roles", list)] });
   }

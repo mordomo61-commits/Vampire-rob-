@@ -3,31 +3,31 @@ import {
   PermissionFlagsBits,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { db } from "../../db";
-import { reactionRoles } from "../../db";
+import { db } from "../../db/index.js";
+import { reactionRoles } from "../../db/index.js";
 import { and, eq } from "drizzle-orm";
 import { successEmbed, errorEmbed } from "../../lib/embed.js";
 
 export const data = new SlashCommandBuilder()
   .setName("reactionrole")
-  .setDescription("Configurar cargo por reação")
+  .setDescription("Configurar cargo por reação em mensagem")
   .addSubcommand((s) =>
     s.setName("add")
-      .setDescription("Adicionar reaction role")
+      .setDescription("Adicionar reaction role a uma mensagem")
       .addStringOption((o) => o.setName("mensagem_id").setDescription("ID da mensagem").setRequired(true))
       .addStringOption((o) => o.setName("emoji").setDescription("Emoji (ex: 👍 ou <:nome:id>)").setRequired(true))
-      .addRoleOption((o) => o.setName("cargo").setDescription("Cargo a atribuir").setRequired(true))
-      .addChannelOption((o) => o.setName("canal").setDescription("Canal onde está a mensagem").setRequired(false))
+      .addRoleOption((o) => o.setName("cargo").setDescription("Cargo a atribuir/remover").setRequired(true))
+      .addChannelOption((o) => o.setName("canal").setDescription("Canal onde está a mensagem (padrão: canal atual)").setRequired(false))
   )
   .addSubcommand((s) =>
     s.setName("remove")
-      .setDescription("Remover reaction role")
+      .setDescription("Remover reaction role de uma mensagem")
       .addStringOption((o) => o.setName("mensagem_id").setDescription("ID da mensagem").setRequired(true))
-      .addStringOption((o) => o.setName("emoji").setDescription("Emoji").setRequired(true))
+      .addStringOption((o) => o.setName("emoji").setDescription("Emoji a remover").setRequired(true))
   )
   .addSubcommand((s) =>
     s.setName("lista")
-      .setDescription("Listar todos os reaction roles do servidor")
+      .setDescription("Listar todos os reaction roles configurados neste servidor")
   )
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles);
 
@@ -46,7 +46,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }
 
     const message = await (channel as any).messages.fetch(messageId).catch(() => null);
-    if (!message) return interaction.reply({ embeds: [errorEmbed("Mensagem não encontrada.")], ephemeral: true });
+    if (!message) return interaction.reply({ embeds: [errorEmbed("Mensagem não encontrada neste canal.")], ephemeral: true });
 
     await message.react(emoji).catch(() => null);
 
@@ -59,7 +59,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }).onConflictDoNothing();
 
     await interaction.reply({
-      embeds: [successEmbed("✅ Reaction Role Configurado", `Emoji **${emoji}** → Cargo ${role} configurado com sucesso!`)],
+      embeds: [successEmbed("✅ Reaction Role Configurado", `Emoji **${emoji}** → Cargo ${role} configurado!\nMembros que reagirem com ${emoji} receberão ou perderão o cargo automaticamente.`)],
     });
   }
 
@@ -67,20 +67,24 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const messageId = interaction.options.getString("mensagem_id", true);
     const emoji = interaction.options.getString("emoji", true);
 
-    await db.delete(reactionRoles).where(
+    const deleted = await db.delete(reactionRoles).where(
       and(
         eq(reactionRoles.guildId, interaction.guild.id),
         eq(reactionRoles.messageId, messageId),
         eq(reactionRoles.emoji, emoji)
       )
-    );
+    ).returning();
+
+    if (!deleted.length) {
+      return interaction.reply({ embeds: [errorEmbed("Reaction role não encontrado.")], ephemeral: true });
+    }
 
     await interaction.reply({ embeds: [successEmbed("🗑️ Reaction Role Removido", `Configuração removida com sucesso.`)] });
   }
 
   else if (sub === "lista") {
     const rows = await db.select().from(reactionRoles).where(eq(reactionRoles.guildId, interaction.guild.id));
-    if (!rows.length) return interaction.reply({ embeds: [errorEmbed("Nenhum reaction role configurado.")], ephemeral: true });
+    if (!rows.length) return interaction.reply({ embeds: [errorEmbed("Nenhum reaction role configurado neste servidor.")], ephemeral: true });
 
     const list = rows.map((r) => `**Msg:** \`${r.messageId}\` | **Emoji:** ${r.emoji} | **Cargo:** <@&${r.roleId}>`).join("\n");
 

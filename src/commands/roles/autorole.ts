@@ -7,37 +7,37 @@ import {
   EmbedBuilder,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { db } from "../../db";
-import { autoRoles } from "../../db";
+import { db } from "../../db/index.js";
+import { autoRoles } from "../../db/index.js";
 import { and, eq } from "drizzle-orm";
 import { successEmbed, errorEmbed, BLOOD_RED } from "../../lib/embed.js";
 
 export const data = [
   new SlashCommandBuilder()
     .setName("autorole")
-    .setDescription("Configurar cargos automáticos")
+    .setDescription("Configurar cargos automáticos ao entrar no servidor")
     .addSubcommand((s) =>
       s.setName("set")
         .setDescription("Definir cargo automático ao entrar no servidor")
-        .addRoleOption((o) => o.setName("cargo").setDescription("Cargo a ser dado").setRequired(true))
+        .addRoleOption((o) => o.setName("cargo").setDescription("Cargo a ser dado automaticamente").setRequired(true))
     )
     .addSubcommand((s) =>
       s.setName("remove")
-        .setDescription("Remover auto-role")
-        .addRoleOption((o) => o.setName("cargo").setDescription("Cargo a remover").setRequired(true))
+        .setDescription("Remover um auto-role configurado")
+        .addRoleOption((o) => o.setName("cargo").setDescription("Cargo a remover do auto-role").setRequired(true))
     )
     .addSubcommand((s) =>
       s.setName("lista")
-        .setDescription("Ver auto-roles configurados")
+        .setDescription("Ver todos os auto-roles configurados neste servidor")
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
 
   new SlashCommandBuilder()
     .setName("autorolebutton")
     .setDescription("Criar botão interativo para atribuição de cargo")
-    .addRoleOption((o) => o.setName("cargo").setDescription("Cargo").setRequired(true))
+    .addRoleOption((o) => o.setName("cargo").setDescription("Cargo que o botão vai atribuir/remover").setRequired(true))
     .addStringOption((o) => o.setName("label").setDescription("Texto do botão").setRequired(true))
-    .addStringOption((o) => o.setName("titulo").setDescription("Título da embed").setRequired(false))
+    .addStringOption((o) => o.setName("titulo").setDescription("Título da mensagem embed").setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
 ];
 
@@ -52,30 +52,44 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     if (sub === "set") {
       const role = interaction.options.getRole("cargo", true);
 
+      const existing = await db.select().from(autoRoles).where(
+        and(eq(autoRoles.guildId, interaction.guild.id), eq(autoRoles.roleId, role.id), eq(autoRoles.method, "join"))
+      );
+
+      if (existing.length) {
+        return interaction.reply({ embeds: [errorEmbed(`O cargo ${role} já está configurado como auto-role!`)], ephemeral: true });
+      }
+
       await db.insert(autoRoles).values({
         guildId: interaction.guild.id,
         roleId: role.id,
         method: "join",
-      }).onConflictDoNothing();
+      });
 
       await interaction.reply({
-        embeds: [successEmbed("✅ Auto-Role Configurado", `O cargo ${role} será dado automaticamente a novos membros!`)],
+        embeds: [successEmbed("✅ Auto-Role Configurado", `O cargo ${role} será dado automaticamente a todos os novos membros!`)],
       });
     }
 
     else if (sub === "remove") {
       const role = interaction.options.getRole("cargo", true);
-      await db.delete(autoRoles).where(
+
+      const deleted = await db.delete(autoRoles).where(
         and(eq(autoRoles.guildId, interaction.guild.id), eq(autoRoles.roleId, role.id))
-      );
-      await interaction.reply({ embeds: [successEmbed("🗑️ Auto-Role Removido", `Cargo ${role} removido do auto-role.`)] });
+      ).returning();
+
+      if (!deleted.length) {
+        return interaction.reply({ embeds: [errorEmbed(`O cargo ${role} não está configurado como auto-role.`)], ephemeral: true });
+      }
+
+      await interaction.reply({ embeds: [successEmbed("🗑️ Auto-Role Removido", `Cargo ${role} removido do auto-role com sucesso.`)] });
     }
 
     else if (sub === "lista") {
       const rows = await db.select().from(autoRoles).where(eq(autoRoles.guildId, interaction.guild.id));
-      if (!rows.length) return interaction.reply({ embeds: [errorEmbed("Nenhum auto-role configurado.")], ephemeral: true });
+      if (!rows.length) return interaction.reply({ embeds: [errorEmbed("Nenhum auto-role configurado neste servidor.")], ephemeral: true });
       const list = rows.map((r) => `<@&${r.roleId}> — método: **${r.method}**`).join("\n");
-      await interaction.reply({ embeds: [successEmbed("📋 Auto-Roles", list)] });
+      await interaction.reply({ embeds: [successEmbed("📋 Auto-Roles Configurados", list)] });
     }
   }
 
@@ -101,6 +115,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       channelId: interaction.channel!.id,
     }).onConflictDoNothing();
 
-    await interaction.reply({ embeds: [successEmbed("✅ Botão Criado!", `Botão para o cargo ${role} criado com sucesso!`)], ephemeral: true });
+    await interaction.reply({ embeds: [successEmbed("✅ Botão Criado!", `Botão para o cargo ${role} criado com sucesso neste canal!`)], ephemeral: true });
   }
 }
