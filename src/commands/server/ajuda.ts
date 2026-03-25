@@ -61,7 +61,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     new ButtonBuilder()
       .setLabel("💬 Servidor de Suporte")
       .setStyle(ButtonStyle.Link)
-      .setURL("https://discord.gg/pZ2YpmEDSG"),
+      .setURL("https://discord.gg/p2jvQeptp8"),
     new ButtonBuilder()
       .setLabel("➕ Adicionar ao Servidor")
       .setStyle(ButtonStyle.Link)
