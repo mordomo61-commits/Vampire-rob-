@@ -3,49 +3,49 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  EmbedBuilder,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { successEmbed, errorEmbed, BLOOD_RED } from "../../lib/embed.js";
-import { getOrCreateWallet, addCoins } from "./coins.js";
+import { db } from "../../db/index.js";
+import { userCoins } from "../../db/index.js";
+import { and, eq } from "drizzle-orm";
+import { errorEmbed, BLOOD_RED } from "../../lib/embed.js";
 
 export const data = new SlashCommandBuilder()
   .setName("coinflip")
-  .setDescription("Jogar cara ou coroa com seus coins!")
+  .setDescription("Cara ou coroa — aposte moedas")
   .addIntegerOption((o) =>
-    o.setName("aposta").setDescription("Quantidade de coins para apostar").setRequired(true).setMinValue(1)
-  )
-  .addStringOption((o) =>
-    o.setName("escolha")
-      .setDescription("Cara ou Coroa?")
-      .setRequired(true)
-      .addChoices({ name: "🪙 Cara", value: "cara" }, { name: "🦅 Coroa", value: "coroa" })
+    o.setName("aposta").setDescription("Quantidade de moedas a apostar").setRequired(true).setMinValue(1)
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  if (!interaction.guild) return;
-  const aposta = interaction.options.getInteger("aposta", true);
-  const escolha = interaction.options.getString("escolha", true);
+  const bet = interaction.options.getInteger("aposta", true);
+  const guildId = interaction.guild!.id;
+  const userId = interaction.user.id;
 
-  const wallet = await getOrCreateWallet(interaction.user.id, interaction.guild.id);
-  if (wallet.balance < aposta) {
-    return interaction.reply({ embeds: [errorEmbed(`Saldo insuficiente! Você tem apenas 🪙 ${wallet.balance}.`)], ephemeral: true });
+  const coinRow = await db.select().from(userCoins).where(and(eq(userCoins.userId, userId), eq(userCoins.guildId, guildId)));
+  const balance = coinRow[0]?.balance ?? 0;
+
+  if (balance < bet) {
+    return interaction.reply({ embeds: [errorEmbed(`Saldo insuficiente! Você tem **${balance} moedas**.`)], ephemeral: true });
   }
 
-  const resultado = Math.random() < 0.5 ? "cara" : "coroa";
-  const ganhou = resultado === escolha;
-  const emoji = resultado === "cara" ? "🪙" : "🦅";
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`coinflip_cara_${userId}_${bet}`)
+      .setLabel("🪙 Cara")
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`coinflip_coroa_${userId}_${bet}`)
+      .setLabel("🦅 Coroa")
+      .setStyle(ButtonStyle.Secondary)
+  );
 
-  const newBalance = await addCoins(interaction.user.id, interaction.guild.id, ganhou ? aposta : -aposta);
+  const embed = new EmbedBuilder()
+    .setColor(BLOOD_RED)
+    .setTitle("🪙 Coinflip")
+    .setDescription(`Você tem **${balance} moedas**.\nApostando **${bet} moedas**!\n\nEscolha: **Cara** ou **Coroa**?`)
+    .setFooter({ text: "Você tem 30 segundos para escolher." });
 
-  const embed = successEmbed(
-    ganhou ? "🎉 Você ganhou!" : "💀 Você perdeu!",
-  )
-    .setDescription(
-      `**Resultado:** ${emoji} ${resultado.charAt(0).toUpperCase() + resultado.slice(1)}\n` +
-      `**Sua escolha:** ${escolha === "cara" ? "🪙" : "🦅"} ${escolha.charAt(0).toUpperCase() + escolha.slice(1)}\n\n` +
-      `${ganhou ? `✅ **+${aposta}** coins!` : `❌ **-${aposta}** coins!`}\n` +
-      `**Saldo atual:** 🪙 ${newBalance.toLocaleString("pt-BR")}`
-    );
-
-  await interaction.reply({ embeds: [embed] });
+  await interaction.reply({ embeds: [embed], components: [row] });
 }

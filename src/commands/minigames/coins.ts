@@ -1,89 +1,64 @@
 import {
   SlashCommandBuilder,
+  EmbedBuilder,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { db } from "../../db";
-import { userCoins } from "../../db";
+import { db } from "../../db/index.js";
+import { userCoins } from "../../db/index.js";
 import { eq, desc, and } from "drizzle-orm";
-import { successEmbed, errorEmbed } from "../../lib/embed.js";
+import { BLOOD_RED, errorEmbed } from "../../lib/embed.js";
 
-export const data = [
-  new SlashCommandBuilder()
-    .setName("saldo")
-    .setDescription("Ver seu saldo de coins")
-    .addUserOption((o) => o.setName("usuario").setDescription("Ver saldo de outro usuário").setRequired(false)),
-
-  new SlashCommandBuilder()
-    .setName("ranking")
-    .setDescription("Ver ranking de coins")
-    .addSubcommand((s) => s.setName("global").setDescription("Ranking global de todos os servidores"))
-    .addSubcommand((s) => s.setName("serve").setDescription("Ranking apenas deste servidor")),
-];
-
-export async function getOrCreateWallet(userId: string, guildId: string) {
-  const [existing] = await db.select().from(userCoins).where(
-    and(eq(userCoins.userId, userId), eq(userCoins.guildId, guildId))
+export const data = new SlashCommandBuilder()
+  .setName("coins")
+  .setDescription("Ver seu saldo de moedas e ranking do servidor")
+  .addSubcommand((s) =>
+    s.setName("saldo").setDescription("Ver seu saldo atual")
+      .addUserOption((o) => o.setName("usuario").setDescription("Ver saldo de outro usuário").setRequired(false))
+  )
+  .addSubcommand((s) =>
+    s.setName("top").setDescription("Ver o ranking de moedas do servidor")
   );
-  if (existing) return existing;
-
-  const [created] = await db.insert(userCoins).values({ userId, guildId, balance: 0, totalEarned: 0 }).returning();
-  return created;
-}
-
-export async function addCoins(userId: string, guildId: string, amount: number) {
-  const wallet = await getOrCreateWallet(userId, guildId);
-  const newBalance = Math.max(0, wallet.balance + amount);
-  const newEarned = amount > 0 ? wallet.totalEarned + amount : wallet.totalEarned;
-  await db.update(userCoins).set({ balance: newBalance, totalEarned: newEarned, updatedAt: new Date() })
-    .where(and(eq(userCoins.userId, userId), eq(userCoins.guildId, guildId)));
-  return newBalance;
-}
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  if (!interaction.guild) return;
-  const cmd = interaction.commandName;
+  const sub = interaction.options.getSubcommand();
+  const guildId = interaction.guild!.id;
 
-  if (cmd === "saldo") {
+  if (sub === "saldo") {
     const target = interaction.options.getUser("usuario") ?? interaction.user;
-    const wallet = await getOrCreateWallet(target.id, interaction.guild.id);
+    const row = await db.select().from(userCoins).where(
+      and(eq(userCoins.userId, target.id), eq(userCoins.guildId, guildId))
+    );
+    const bal = row[0]?.balance ?? 0;
+    const totalEarned = row[0]?.totalEarned ?? 0;
 
-    await interaction.reply({
-      embeds: [
-        successEmbed(`💰 Saldo de ${target.displayName}`)
-          .setDescription(`**Coins:** 🪙 ${wallet.balance.toLocaleString("pt-BR")}\n**Total ganho:** 🏆 ${wallet.totalEarned.toLocaleString("pt-BR")}`)
-          .setThumbnail(target.displayAvatarURL()),
-      ],
-    });
+    const embed = new EmbedBuilder()
+      .setColor(BLOOD_RED)
+      .setTitle(`💰 Saldo de ${target.username}`)
+      .setThumbnail(target.displayAvatarURL())
+      .addFields(
+        { name: "💰 Saldo Atual", value: `**${bal.toLocaleString("pt-BR")} moedas**`, inline: true },
+        { name: "📈 Total Ganho", value: `**${totalEarned.toLocaleString("pt-BR")} moedas**`, inline: true },
+      );
+    await interaction.reply({ embeds: [embed] });
   }
 
-  else if (cmd === "ranking") {
-    const sub = interaction.options.getSubcommand();
+  else if (sub === "top") {
+    const rows = await db.select().from(userCoins).where(eq(userCoins.guildId, guildId)).orderBy(desc(userCoins.balance)).limit(10);
 
-    if (sub === "global") {
-      const top = await db.select().from(userCoins).orderBy(desc(userCoins.balance)).limit(10);
-      if (!top.length) return interaction.reply({ embeds: [errorEmbed("Nenhum dado disponível.")], ephemeral: true });
+    if (!rows.length) return interaction.reply({ embeds: [errorEmbed("Nenhum usuário com moedas neste servidor ainda.")], ephemeral: true });
 
-      const medals = ["🥇", "🥈", "🥉"];
-      const list = top.map((r, i) =>
-        `${medals[i] ?? `**${i + 1}.**`} <@${r.userId}> — 🪙 ${r.balance.toLocaleString("pt-BR")}`
-      ).join("\n");
+    const medals = ["🥇", "🥈", "🥉"];
+    const list = rows.map((r, i) => {
+      const medal = medals[i] ?? `**${i + 1}.**`;
+      return `${medal} <@${r.userId}> — **${r.balance.toLocaleString("pt-BR")} moedas**`;
+    }).join("\n");
 
-      await interaction.reply({ embeds: [successEmbed("🏆 Ranking Global de Coins", list)] });
-    }
+    const embed = new EmbedBuilder()
+      .setColor(BLOOD_RED)
+      .setTitle("🏆 Ranking de Moedas")
+      .setDescription(list)
+      .setFooter({ text: `Top ${rows.length} membros do servidor` });
 
-    else if (sub === "serve") {
-      const top = await db.select().from(userCoins)
-        .where(eq(userCoins.guildId, interaction.guild.id))
-        .orderBy(desc(userCoins.balance)).limit(10);
-
-      if (!top.length) return interaction.reply({ embeds: [errorEmbed("Nenhum dado disponível.")], ephemeral: true });
-
-      const medals = ["🥇", "🥈", "🥉"];
-      const list = top.map((r, i) =>
-        `${medals[i] ?? `**${i + 1}.**`} <@${r.userId}> — 🪙 ${r.balance.toLocaleString("pt-BR")}`
-      ).join("\n");
-
-      await interaction.reply({ embeds: [successEmbed(`🏆 Ranking de ${interaction.guild.name}`, list)] });
-    }
+    await interaction.reply({ embeds: [embed] });
   }
 }

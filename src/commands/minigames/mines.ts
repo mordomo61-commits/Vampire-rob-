@@ -5,145 +5,98 @@ import {
   ButtonStyle,
   EmbedBuilder,
   type ChatInputCommandInteraction,
-  type Client,
 } from "discord.js";
-import { db } from "../../db";
-import { gameSessions } from "../../db";
+import { db } from "../../db/index.js";
+import { gameSessions, userCoins } from "../../db/index.js";
 import { and, eq } from "drizzle-orm";
-import { successEmbed, errorEmbed, BLOOD_RED } from "../../lib/embed.js";
-import { getOrCreateWallet, addCoins } from "./coins.js";
+import { errorEmbed, BLOOD_RED } from "../../lib/embed.js";
 
-export const data = new SlashCommandBuilder()
-  .setName("mines")
-  .setDescription("Jogo de campo minado! Abra casas sem cair nas minas.")
-  .addIntegerOption((o) =>
-    o.setName("aposta").setDescription("Coins para apostar").setRequired(true).setMinValue(1)
-  )
-  .addIntegerOption((o) =>
-    o.setName("minas").setDescription("Número de minas (1-24)").setRequired(true).setMinValue(1).setMaxValue(24)
-  );
+const GRID_SIZE = 5;
+const TOTAL_CELLS = GRID_SIZE * GRID_SIZE;
 
-export function buildMinesGrid(data: any): ActionRowBuilder<ButtonBuilder>[] {
+function buildGrid(mineCount: number, revealed: Set<number>): { mineSet: Set<number> } {
+  const mineSet = new Set<number>();
+  while (mineSet.size < mineCount) {
+    mineSet.add(Math.floor(Math.random() * TOTAL_CELLS));
+  }
+  return { mineSet };
+}
+
+function multiplier(safe: number, mines: number): number {
+  const r = mines / TOTAL_CELLS;
+  return Math.pow(1 / (1 - r), safe) * 0.9;
+}
+
+function buildComponents(mineSet: Set<number>, revealed: Set<number>, gameOver = false, sessionId = 0): ActionRowBuilder<ButtonBuilder>[] {
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
-  for (let row = 0; row < 5; row++) {
+  for (let row = 0; row < GRID_SIZE; row++) {
     const actionRow = new ActionRowBuilder<ButtonBuilder>();
-    for (let col = 0; col < 5; col++) {
-      const idx = row * 5 + col;
-      const revealed = data.revealed[idx];
-      const isMine = data.mines.includes(idx);
-      let style = ButtonStyle.Secondary;
-      let label = "⬜";
-      let disabled = false;
-
-      if (data.status === "lost") {
-        if (isMine) { label = "💣"; style = ButtonStyle.Danger; }
-        else if (revealed) { label = "💎"; style = ButtonStyle.Success; }
-        disabled = true;
-      } else if (data.status === "won") {
-        label = isMine ? "💣" : "💎";
-        style = isMine ? ButtonStyle.Danger : ButtonStyle.Success;
-        disabled = true;
+    for (let col = 0; col < GRID_SIZE; col++) {
+      const idx = row * GRID_SIZE + col;
+      const isMine = mineSet.has(idx);
+      const isRevealed = revealed.has(idx);
+      const btn = new ButtonBuilder().setCustomId(`mines_cell_${sessionId}_${idx}`);
+      if (gameOver) {
+        if (isMine) { btn.setEmoji("💣").setStyle(ButtonStyle.Danger).setDisabled(true); }
+        else if (isRevealed) { btn.setEmoji("💎").setStyle(ButtonStyle.Success).setDisabled(true); }
+        else { btn.setLabel("·").setStyle(ButtonStyle.Secondary).setDisabled(true); }
       } else {
-        if (revealed) { label = "💎"; style = ButtonStyle.Success; disabled = true; }
+        if (isRevealed) { btn.setEmoji("💎").setStyle(ButtonStyle.Success).setDisabled(true); }
+        else { btn.setLabel("·").setStyle(ButtonStyle.Secondary); }
       }
-
-      actionRow.addComponents(
-        new ButtonBuilder()
-          .setCustomId(revealed || data.status !== "active" ? `mines_done_${idx}` : `mines_click_${data.sessionId}_${idx}`)
-          .setLabel(label)
-          .setStyle(style)
-          .setDisabled(disabled || data.status !== "active")
-      );
+      actionRow.addComponents(btn);
     }
     rows.push(actionRow);
   }
-
-  // Add cashout row
   const cashRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`mines_cashout_${data.sessionId}`)
-      .setLabel(`💰 Sacar (${calculateMultiplier(data.revealed.filter(Boolean).length, data.mines.length, 25)}x)`)
-      .setStyle(ButtonStyle.Primary)
-      .setDisabled(data.status !== "active" || data.revealed.filter(Boolean).length === 0)
+    new ButtonBuilder().setCustomId(`mines_cashout_${sessionId}`).setLabel("💰 Sacar Prêmio").setStyle(ButtonStyle.Primary).setDisabled(gameOver)
   );
   rows.push(cashRow);
-
   return rows;
 }
 
-export function calculateMultiplier(safe: number, mines: number, total: number): string {
-  if (safe === 0) return "1.00";
-  let prob = 1;
-  let remaining = total;
-  for (let i = 0; i < safe; i++) {
-    prob *= (remaining - mines) / remaining;
-    remaining--;
-  }
-  return (0.97 / prob).toFixed(2);
-}
-
-export function buildMinesEmbed(data: any, bet: number): EmbedBuilder {
-  const safeCount = data.revealed.filter(Boolean).length;
-  const mult = calculateMultiplier(safeCount, data.mines.length, 25);
-  const prize = (bet * parseFloat(mult)).toFixed(0);
-
-  return new EmbedBuilder()
-    .setColor(BLOOD_RED)
-    .setTitle("💣 Campo Minado")
-    .setDescription(
-      `**Aposta:** 🪙 ${bet}\n` +
-      `**Minas:** 💣 ${data.mines.length}\n` +
-      `**Casas abertas:** 💎 ${safeCount}\n` +
-      `**Multiplicador:** ${mult}x\n` +
-      `**Prêmio potencial:** 🪙 ${prize}`
-    );
-}
-
-export async function execute(interaction: ChatInputCommandInteraction, client: Client) {
-  if (!interaction.guild) return;
-  const aposta = interaction.options.getInteger("aposta", true);
-  const numMinas = interaction.options.getInteger("minas", true);
-
-  const wallet = await getOrCreateWallet(interaction.user.id, interaction.guild.id);
-  if (wallet.balance < aposta) {
-    return interaction.reply({ embeds: [errorEmbed(`Saldo insuficiente! Você tem 🪙 ${wallet.balance}.`)], ephemeral: true });
-  }
-
-  // Check existing session
-  const existing = await db.select().from(gameSessions).where(
-    and(
-      eq(gameSessions.userId, interaction.user.id),
-      eq(gameSessions.guildId, interaction.guild.id),
-      eq(gameSessions.gameType, "mines"),
-      eq(gameSessions.status, "active")
-    )
+export const data = new SlashCommandBuilder()
+  .setName("mines")
+  .setDescription("Jogo de campo minado — encontre diamantes e evite as minas!")
+  .addIntegerOption((o) =>
+    o.setName("aposta").setDescription("Valor da aposta").setRequired(true).setMinValue(1)
+  )
+  .addIntegerOption((o) =>
+    o.setName("minas").setDescription("Número de minas no campo (1-20)").setRequired(false).setMinValue(1).setMaxValue(20)
   );
-  if (existing.length) {
-    return interaction.reply({ embeds: [errorEmbed("Você já tem um jogo de mines ativo! Termine o jogo anterior primeiro.")], ephemeral: true });
-  }
 
-  // Generate mine positions
-  const minePositions: number[] = [];
-  while (minePositions.length < numMinas) {
-    const pos = Math.floor(Math.random() * 25);
-    if (!minePositions.includes(pos)) minePositions.push(pos);
-  }
+export async function execute(interaction: ChatInputCommandInteraction) {
+  const bet = interaction.options.getInteger("aposta", true);
+  const mineCount = interaction.options.getInteger("minas") ?? 5;
+  const guildId = interaction.guild!.id;
+  const userId = interaction.user.id;
 
-  await addCoins(interaction.user.id, interaction.guild.id, -aposta);
+  const existing = await db.select().from(gameSessions).where(
+    and(eq(gameSessions.userId, userId), eq(gameSessions.guildId, guildId), eq(gameSessions.gameType, "mines"), eq(gameSessions.status, "active"))
+  );
+  if (existing.length) return interaction.reply({ embeds: [errorEmbed("Você já tem um jogo de mines em andamento!")], ephemeral: true });
 
-  const [session] = await db.insert(gameSessions).values({
-    userId: interaction.user.id,
-    guildId: interaction.guild.id,
-    channelId: interaction.channel!.id,
-    gameType: "mines",
-    data: { mines: minePositions, revealed: Array(25).fill(false), bet: aposta, status: "active" },
+  const coinRow = await db.select().from(userCoins).where(and(eq(userCoins.userId, userId), eq(userCoins.guildId, guildId)));
+  const balance = coinRow[0]?.balance ?? 0;
+  if (balance < bet) return interaction.reply({ embeds: [errorEmbed(`Saldo insuficiente! Você tem **${balance} moedas**.`)], ephemeral: true });
+
+  const { mineSet } = buildGrid(mineCount, new Set());
+  const mineArray = Array.from(mineSet);
+
+  const sess = await db.insert(gameSessions).values({
+    userId, guildId, channelId: interaction.channel!.id, gameType: "mines",
+    data: { bet, mineCount, mineSet: mineArray, revealed: [] },
     status: "active",
   }).returning();
+  const sessionId = sess[0]!.id;
 
-  const gameData = { mines: minePositions, revealed: Array(25).fill(false), bet: aposta, status: "active", sessionId: session.id };
+  const components = buildComponents(new Set(mineArray), new Set(), false, sessionId);
 
-  await interaction.reply({
-    embeds: [buildMinesEmbed(gameData, aposta)],
-    components: buildMinesGrid(gameData),
-  });
+  const embed = new EmbedBuilder()
+    .setColor(BLOOD_RED)
+    .setTitle("💣 Mines")
+    .setDescription(`Aposta: **${bet} moedas** | Minas: **${mineCount}**\n\nClique nos botões para revelar diamantes 💎. Evite as minas 💣!\n\n**Multiplicador atual:** 1.00x`)
+    .setFooter({ text: "Saque a qualquer momento para garantir seus ganhos!" });
+
+  await interaction.reply({ embeds: [embed], components });
 }
