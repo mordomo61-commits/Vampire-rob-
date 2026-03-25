@@ -111,16 +111,6 @@ export const quizQuestions = pgTable("quiz_questions", {
   correctIndex: integer("correct_index").notNull(),
 });
 
-export const webhooksTable = pgTable("guild_webhooks", {
-  id: serial("id").primaryKey(),
-  guildId: text("guild_id").notNull(),
-  name: text("name").notNull(),
-  url: text("url").notNull(),
-  avatarUrl: text("avatar_url"),
-  webhookId: text("webhook_id").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
 export const coinTransfers = pgTable("coin_transfers", {
   id: serial("id").primaryKey(),
   fromUserId: text("from_user_id").notNull(),
@@ -151,4 +141,26 @@ export const linkBlockConfig = pgTable("link_block_config", {
   message: text("message").notNull().default("🚫 Links não são permitidos neste canal!"),
   allowedRoleIds: text("allowed_role_ids").array().notNull().default([]),
   active: boolean("active").notNull().default(true),
+});
+
+export const welcomeConfig = pgTable("welcome_config", {
+  id: serial("id").primaryKey(),
+  guildId: text("guild_id").notNull().unique(),
+  channelId: text("channel_id").notNull(),
+  message: text("message").notNull().default("👋 Bem-vindo(a) ao servidor, {user}!"),
+  embedEnabled: boolean("embed_enabled").notNull().default(true),
+  embedColor: text("embed_color").notNull().default("#8B0000"),
+  embedTitle: text("embed_title").notNull().default("👋 Novo Membro!"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const leaveConfig = pgTable("leave_config", {
+  id: serial("id").primaryKey(),
+  guildId: text("guild_id").notNull().unique(),
+  channelId: text("channel_id").notNull(),
+  message: text("message").notNull().default("😢 {user} saiu do servidor."),
+  embedEnabled: boolean("embed_enabled").notNull().default(true),
+  embedColor: text("embed_color").notNull().default("#8B0000"),
+  embedTitle: text("embed_title").notNull().default("👋 Membro Saiu"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
